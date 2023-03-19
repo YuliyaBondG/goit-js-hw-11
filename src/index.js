@@ -1,94 +1,148 @@
-import { fetchImages } from './js/fetchImages';
+import axios from 'axios';
 import Notiflix from 'notiflix';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
 
-const input = document.querySelector('.search-form-input');
-const btnSearch = document.querySelector('.search-form-button');
-const gallery = document.querySelector('.gallery');
-const btnLoadMore = document.querySelector('.load-more');
-let gallerySimpleLightbox = new SimpleLightbox('.gallery a');
 
-btnLoadMore.style.display = 'none';
+const refs = {
+  form: document.querySelector('.search-form'),
+  input: document.querySelector('input'),
+  gallery: document.querySelector('.gallery'),
+  btnLoadMore: document.querySelector('.load-more'),
+};
 
-let pageNumber = 1;
+let page = 1; 
 
-btnSearch.addEventListener('click', onBtnCreate);
+refs.btnLoadMore.style.display = 'none'; 
+refs.form.addEventListener('submit', onSearch); 
+refs.btnLoadMore.addEventListener('click', onBtnLoadMore); 
 
-btnLoadMore.addEventListener('click', onBtnLoad);
 
-function onBtnCreate(event) {
-  event.preventDefault();
-  cleanGallery();
-  const symbolInput = input.value.trim();
-  if (!symbolInput) {
-    return;
-  }
-  {
-    fetchImages(symbolInput, pageNumber).then(proccesImageCreate);
+function onSearch(evt) {
+  evt.preventDefault(); 
+
+  page = 1;
+  refs.gallery.innerHTML = ''; 
+
+  const name = refs.input.value.trim(); 
+
+  
+  if (name !== '') {
+    pixabay(name); 
+
+  } else {
+    refs.btnLoadMore.style.display = 'none';
+
+    return Notiflix.Notify.failure(
+      'Sorry, there are no images matching your search query. Please try again.'
+    );
   }
 }
 
-function proccesImageCreate(foundData) {
-  if (foundData.hits.length === 0) {
-    console.log(foundData);
+
+function onBtnLoadMore() {
+  const name = refs.input.value.trim();
+  page += 1; 
+  pixabay(name, page); 
+}
+
+
+async function pixabay(name, page) {
+  const API_URL = 'https://pixabay.com/api/';
+
+  
+  const options = {
+    params: {
+      key: '34474305-59cca09f4f729e737f986d19f', 
+      q: name,
+      image_type: 'photo',
+      orientation: 'horizontal',
+      safesearch: 'true',
+      page: page,
+      per_page: 40,
+    },
+  };
+
+  try {
+    
+    const response = await axios.get(API_URL, options);
+
+    
+    notification(
+      response.data.hits.length, 
+      response.data.total 
+    );
+
+    createMarkup(response.data); 
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+
+function createMarkup(arr) {
+  const markup = arr.hits
+    .map(
+      item =>
+        `<a class="photo-link" href="${item.largeImageURL}">
+            <div class="photo-card">
+            <div class="photo">
+            <img src="${item.webformatURL}" alt="${item.tags}" loading="lazy"/>
+            </div>
+                    <div class="info">
+                        <p class="info-item">
+                            <b>Likes</b>
+                            ${item.likes}
+                        </p>
+                        <p class="info-item">
+                            <b>Views</b>
+                            ${item.views}
+                        </p>
+                        <p class="info-item">
+                            <b>Comments</b>
+                            ${item.comments}
+                        </p>
+                        <p class="info-item">
+                            <b>Downloads</b>
+                            ${item.downloads}
+                        </p>
+                    </div>
+            </div>
+        </a>`
+    )
+    .join(''); 
+  refs.gallery.insertAdjacentHTML('beforeend', markup); 
+  simpleLightBox.refresh(); 
+}
+
+const simpleLightBox = new SimpleLightbox('.gallery a', {
+  captionsData: 'alt', 
+  captionDelay: 250, 
+});
+
+
+function notification(length, totalHits) {
+  if (length === 0) {
+
+      
     Notiflix.Notify.failure(
       'Sorry, there are no images matching your search query. Please try again.'
     );
-  } else {
-    renderImageList(foundData.hits);
-    Notiflix.Notify.success(`Hooray! We found ${foundData.totalHits} images.`);
-    btnLoadMore.style.display = 'block';
-    gallerySimpleLightbox.refresh();
+    return;
   }
-}
 
-function onBtnLoad() {
-  pageNumber++;
-  const trimmedValue = input.value.trim();
-  btnLoadMore.style.display = 'none';
-  fetchImages(trimmedValue, pageNumber).then(foundData => {
-    if (foundData.hits.length === 0) {
-      Notiflix.Notify.failure(
-        'Sorry, there are no images matching your search query. Please try again.'
-      );
-    } else {
-      renderImageList(foundData.hits);
-      Notiflix.Notify.success(
-        `Hooray! We found ${foundData.totalHits} images.`
-      );
-      btnLoadMore.style.display = 'block';
-    }
-  });
-}
+  if (page === 1) {
+    refs.btnLoadMore.style.display = 'flex'; 
 
-function renderImageList(images) {
-  const markup = images
-    .map(image => {
-      return `<div class="photo-card">
-       <a href="${image.largeImageURL}"><img class="photo" src="${image.webformatURL}" alt="${image.tags}" title="${image.tags}" loading="lazy"/></a>
-        <div class="info">
-           <p class="info-item">
-    <b>Likes</b> <span class="info-item-api"> ${image.likes} </span>
-</p>
-            <p class="info-item">
-                <b>Views</b> <span class="info-item-api">${image.views}</span>  
-            </p>
-            <p class="info-item">
-                <b>Comments</b> <span class="info-item-api">${image.comments}</span>  
-            </p>
-            <p class="info-item">
-                <b>Downloads</b> <span class="info-item-api">${image.downloads}</span> 
-            </p>
-        </div>
-    </div>`;
-    })
-    .join('');
-  gallery.innerHTML += markup;
-}
+    
+    Notiflix.Notify.success(`Hooray! We found ${totalHits} images.`);
+  }
 
-function cleanGallery() {
-  gallery.innerHTML = '';
-  pageNumber = 1;
-  btnLoadMore.style.display = 'none';
+  if (length < 40) {
+    refs.btnLoadMore.style.display = 'none'; 
+
+      Notiflix.Notify.info(
+      "We're sorry, but you've reached the end of search results."
+    );
+  }
 }
